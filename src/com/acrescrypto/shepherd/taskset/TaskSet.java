@@ -109,7 +109,7 @@ public abstract class TaskSet<T extends TaskSet<?>> {
 		if(exceptionHandler != null) {
 			try {
 				exceptionHandler.handle(exception);
-			} catch(Exception exc2) {
+			} catch(Throwable exc2) {
 				escalateException(exception);
 				if(exc2 != exception && !exc2.getClass().equals(exception.getClass())) {
 					exception(exc2);

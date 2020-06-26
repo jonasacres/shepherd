@@ -3,9 +3,10 @@ package com.acrescrypto.shepherd.worker;
 import java.util.LinkedList;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
-import com.acrescrypto.shepherd.Program;
-import com.acrescrypto.shepherd.Callbacks.ExceptionHandler;
+import com.acrescrypto.shepherd.Callbacks.OpportunisticExceptionHandler;
+import com.acrescrypto.shepherd.core.Program;
 import com.acrescrypto.shepherd.taskset.Task;
 
 public class WorkerPool {
@@ -14,7 +15,7 @@ public class WorkerPool {
 	}
 	
 	protected Program                                program;
-	protected ExceptionHandler                       exceptionHandler;
+	protected OpportunisticExceptionHandler          exceptionHandler;
 	protected int                                    targetWorkerCount;
 	protected boolean                                workerCountVerified;
 	protected String                                 name;
@@ -27,13 +28,52 @@ public class WorkerPool {
 		this.program           = program;
 		this.threadGroup       = new ThreadGroup("WorkerPool");
 		this.exceptionHandler  = (exc)->{
-			// TODO: Default exception handler. Log as error?
-			exc.printStackTrace();
+			try {
+				throw(exc);
+			} catch(InterruptedException xx) {
+				/* Thread was interrupted and no one caught this, so we're probably OK with
+				 * whatever task we were handling being quietly ended. */
+			} catch(Throwable xx) {
+				throw(exc);
+			}
 		};
+	}
+	
+	public Program program() {
+		return program;
 	}
 	
 	public String name() {
 		return name;
+	}
+	
+	/** Make a best effort to terminate all threads. */
+	public synchronized WorkerPool shutdown() {
+		workers(0);
+		for(Worker worker : workers) {
+			worker.thread().interrupt();
+		}
+		
+		return this;
+	}
+	
+	/** Shutdown and block until all threads terminate. 
+	 * @throws TimeoutException Timeout expired before all threads terminated 
+	 * @throws InterruptedException Thread was interrupted before worker threads could terminate */
+	public WorkerPool shutdownAndWait(long timeoutMs) throws TimeoutException, InterruptedException  {
+		long deadline = System.currentTimeMillis() + timeoutMs;
+		shutdown();
+		
+		while(System.currentTimeMillis() < deadline
+		   && threadGroup.activeCount() > 0) {
+			Thread.sleep(1);
+		}
+		
+		if(threadGroup.activeCount() > 0) {
+			throw new TimeoutException();
+		}
+		
+		return this;
 	}
 	
 	public synchronized WorkerPool name(String name) {
@@ -55,13 +95,18 @@ public class WorkerPool {
 		return this;
 	}
 	
-	public WorkerPool onException(ExceptionHandler handler) {
+	public WorkerPool onException(OpportunisticExceptionHandler handler) {
 		this.exceptionHandler = handler;
 		return this;
 	}
 	
 	public WorkerPool exception(Throwable exc) {
-		exceptionHandler.exception(exc);
+		try {
+			exceptionHandler.handle(exc);
+		} catch (Throwable xx) {
+			program.exception(xx);
+		}
+		
 		return this;
 	}
 	
@@ -102,7 +147,7 @@ public class WorkerPool {
 	}
 	
 	protected boolean isThisWorkerAllowedToContinue() {
-		if( workerCountVerified) return true;
+		if(workerCountVerified) return true;
 		return checkThreadCount();
 	}
 	

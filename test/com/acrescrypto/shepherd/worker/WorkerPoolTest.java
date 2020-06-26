@@ -1,17 +1,19 @@
 package com.acrescrypto.shepherd.worker;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static com.acrescrypto.shepherd.TestTools.*;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import com.acrescrypto.shepherd.Program;
+import com.acrescrypto.shepherd.core.Program;
 import com.acrescrypto.shepherd.taskset.SimpleTask;
 import com.acrescrypto.shepherd.taskset.SimpleTaskSet;
 
@@ -23,6 +25,11 @@ public class WorkerPoolTest {
 	public void beforeEach() {
 		pool = new WorkerPool(new Program())
 			     .run();
+	}
+	
+	@AfterEach
+	public void afterEach() throws TimeoutException, InterruptedException {
+		pool.shutdownAndWait(100);
 	}
 	
 	@Test
@@ -158,5 +165,78 @@ public class WorkerPoolTest {
 		pool.name("newname");
 		stabilize(10, 100, ()->pool.threadGroup().activeCount());
 		assertEquals(0, oldGroup.activeCount());
+	}
+	
+	@Test
+	public void testShutdownTerminatesWorkerThreads() {
+		pool.workers(8);
+		waitFor(100, ()->pool.threadGroup().activeCount() == 8);
+		
+		pool.shutdown();
+		stabilize(10, 100, ()->pool.threadGroup().activeCount());
+		waitFor  (    100, ()->pool.threadGroup().activeCount() == 0);
+	}
+	
+	@Test
+	public void testShutdownInterruptsWorkerThreads() {
+		AtomicInteger numPending = new AtomicInteger(0);
+		int numWorkers = 8;
+		
+		pool.workers(numWorkers);
+		waitFor(100, ()->pool.threadGroup().activeCount() == numWorkers);
+		
+		SimpleTaskSet taskset = new SimpleTaskSet("test")
+			.pool(pool);
+		for(int i = 0; i < numWorkers; i++) {
+			taskset.task(()->{
+				numPending.incrementAndGet();
+				synchronized(taskset) {
+					taskset.wait(1000);
+					fail("Timeout expired");
+				}
+			});
+		}
+		
+		taskset.run();
+
+		waitFor  (    100, ()->numPending.get() == numWorkers);
+		pool.shutdown();
+		
+		stabilize(10, 100, ()->pool.threadGroup().activeCount());
+		waitFor  (    100, ()->pool.threadGroup().activeCount() == 0);
+	}
+	
+	@Test
+	public void testShutdownAndWaitBlocksUntilThreadsTerminated() throws TimeoutException, InterruptedException {
+		pool.workers(8);
+		waitFor(100, ()->pool.threadGroup().activeCount() == 8);
+		
+		pool.shutdownAndWait(100);
+		assertEquals(0, pool.threadGroup().activeCount());
+	}
+	
+	@Test
+	public void testShutdownAndWaitThrowsTimeoutExceptionIfThreadsNotTerminated() throws TimeoutException, InterruptedException {
+		AtomicBoolean canFinish = new AtomicBoolean();
+		
+		new SimpleTaskSet("test")
+			.pool(pool)
+			.task(()->{
+				while(!canFinish.get()) {
+					try {
+						Thread.sleep(1);
+					} catch(InterruptedException exc) {
+					}
+				}
+		  }).run();
+		
+		try {
+			pool.shutdownAndWait(5);
+			fail("Should not have succeeded");
+		} catch(TimeoutException exc) {
+			canFinish.set(true);
+		}
+		
+		waitFor  (    100, ()->pool.threadGroup().activeCount() == 0);
 	}
 }

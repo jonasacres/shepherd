@@ -17,6 +17,7 @@ public class SimpleTask extends Task<SimpleTask> {
 	
 	protected SimpleTaskCallback lambda;
 	protected SimpleTaskSet      taskset;
+	protected boolean            important;
 	protected boolean            finished;
 	
 	/** Construct a SimpleTask from a SimpleTaskCallback. This callback received a reference
@@ -64,6 +65,11 @@ public class SimpleTask extends Task<SimpleTask> {
 		return finished;
 	}
 	
+	/** True when this task is marked important */
+	public boolean isImportant() {
+		return important;
+	}
+	
 	/** Causes execution of this task to cease, and notifies the SimpleTaskSet that
 	 * it has finished.
 	 */
@@ -91,5 +97,40 @@ public class SimpleTask extends Task<SimpleTask> {
 	public SimpleTask repeat() {
 		taskset().pool().addTask(this);
 		throw new TaskFinishedException();
+	}
+	
+	/** Mark this task as important. Non-important tasks can only run when all parallel
+	 * important tasks have invoked their .bootstrapped method.
+	 */
+	public SimpleTask important() {
+		this.important = true;
+		return this;
+	}
+	
+	/** Mark this task as having completed its bootstrap phase. This has no effect unless
+	 * the task is marked as important.
+	 */
+	public SimpleTask registered() {
+		if(isImportant()) {
+			taskset().registered(this);
+		}
+		
+		return this;
+	}
+	
+	@Override
+	public int compareTo(Task<?> other) {
+		if(!(other instanceof SimpleTask)) {
+			return super.compareTo(other);
+		}
+		
+		SimpleTask oo = (SimpleTask) other;
+		if(isImportant() == oo.isImportant()) {
+			return super.compareTo(oo);
+		}
+		
+		return isImportant()
+			 ? -1
+			 :  1;
 	}
 }

@@ -4,22 +4,51 @@ import java.util.Deque;
 import java.util.NoSuchElementException;
 import java.util.PriorityQueue;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.acrescrypto.shepherd.Callbacks.VoidCallback;
 import com.acrescrypto.shepherd.taskset.SimpleTask.SimpleTaskCallback;
-import com.acrescrypto.shepherd.worker.WorkerPool;
 
 /** Describes a set of simple tasks, with no return value or argument. These tasks may
  * run in parallel (.task), or be gated to run only after all previous tasks have been
  * completed (.then). 
  */
 public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
-	protected Deque<Deque<SimpleTask>> tasks  = new ConcurrentLinkedDeque<>();
-	protected Deque<SimpleTask>        after  = new ConcurrentLinkedDeque<>();
+	public interface SimpleTaskSignalFullCallback {
+		void call(Object argument, SimpleTask task) throws Throwable;
+	}
+	
+	public interface SimpleTaskSignalVoidCallback {
+		void call() throws Throwable;
+	}
+	
+	protected Deque<Deque<SimpleTask>> allTasks  = new ConcurrentLinkedDeque<>();
+	protected Deque<Deque<SimpleTask>> tasks     = new ConcurrentLinkedDeque<>();
+	protected Deque<SimpleTask>        after     = new ConcurrentLinkedDeque<>();
 	protected boolean                  finished;
+	protected AtomicInteger            pendingRegistrations;
 	
 	public SimpleTaskSet(String name) {
 		super(name);
+	}
+	
+	/** List all tasks performed in this taskset, including finished ones.
+	 * @return A list of lists. The outer list represents task groups, and contains lists of
+	 * tasks that may run in parallel. Each task within a given list must complete before the
+	 * next list of tasks may begin.
+	 */
+	public Deque<Deque<SimpleTask>> tasks() {
+		return allTasks;
+	}
+	
+	/** List tasks scheduled to be performed in this task set, not including finished tasks,
+	 * or tasks that are presently scheduled onto a Worker.
+	 * @return A list of lists. The outer list represents task groups, and contains lists of
+	 * tasks that may run in parallel. Each task within a given list must complete before the
+	 * next list of tasks may begin.
+	 */
+	public Deque<Deque<SimpleTask>> pendingTasks() {
+		return tasks;
 	}
 	
 	/** Perform a task with no arguments. May run in parallel with other tasks defined
@@ -49,8 +78,9 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 	/** Perform a task with no arguments. May run in parallel with other tasks defined
 	 * in this SimpleTaskSet. */
 	public SimpleTaskSet task(SimpleTask task) {
-		if(tasks.isEmpty()) addGate();
-		tasks.getLast().add(task);
+		if(tasks.isEmpty()) gate();
+		tasks   .getLast().add(task);
+		allTasks.getLast().add(task);
 		return this;
 	}
 	
@@ -59,7 +89,7 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 	 * in subsequent calls to this SimpleTaskSet, but will not run until all previously-defined
 	 * tasks have completed. */
 	public SimpleTaskSet then(SimpleTaskCallback lambda) {
-		addGate();
+		gate();
 		return task(lambda);
 	}
 	
@@ -67,7 +97,7 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 	 * in subsequent calls to this SimpleTaskSet, but will not run until all previously-defined
 	 * tasks have completed. */
 	public SimpleTaskSet then(VoidCallback lambda) {
-		addGate();
+		gate();
 		return task(lambda);
 	}
 
@@ -75,7 +105,7 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 	 * in subsequent calls to this SimpleTaskSet, but will not run until all previously-defined
 	 * tasks have completed. */
 	public SimpleTaskSet then(String name, SimpleTaskCallback lambda) {
-		addGate();
+		gate();
 		return task(name, lambda);
 	}
 	
@@ -83,7 +113,7 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 	 * in subsequent calls to this SimpleTaskSet, but will not run until all previously-defined
 	 * tasks have completed. */
 	public SimpleTaskSet then(String name, VoidCallback lambda) {
-		addGate();
+		gate();
 		return task(name, lambda);
 	}
 	
@@ -91,8 +121,72 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 	 * in subsequent calls to this SimpleTaskSet, but will not run until all previously-defined
 	 * tasks have completed. */
 	public SimpleTaskSet then(SimpleTask task) {
-		addGate();
+		gate();
 		return task(task);
+	}
+	
+	/** Perform a task after a signal is received. The callback is invoked with a the signal
+	 * argument, and a reference to the SimpleTask object created by this method. This reference
+	 * must be marked completed (e.g. using .finish()).
+	 */
+	public SimpleTaskSet waitForSignal(String signal, SimpleTaskSignalFullCallback callback) {
+		return task(new SimpleTask(
+				this,
+				"waitForSignal " + signal,
+				(task)->{
+					pool().program().hub().handle(signal, (arg)->{
+						callback.call(arg, task);
+					});
+					
+					task.registered();
+				}
+			).important()
+		);
+	}
+	
+	/** Perform a task after a signal is received whose argument matches the specified object
+	 * using the .equals method. The callback is invoked with a the signal argument, and a reference to the SimpleTask object created by this method. This reference
+	 * must be marked completed (e.g. using .finish()).
+	 */
+	public SimpleTaskSet waitForSignal(String signal, Object argument, SimpleTaskSignalFullCallback callback) {
+		return task(new SimpleTask(
+				this,
+				"waitForSignal " + signal,
+				(task)->{
+					pool().program().hub().handle(signal, argument, (arg)->{
+						callback.call(arg, task);
+					});
+					
+					task.registered();
+				}
+			).important()
+		);
+	}
+	
+	/** Perform a task after a signal is received. The task is considered finished when the
+	 * callback returns. The callback receives no arguments.
+	 */
+	public SimpleTaskSet waitForSignal(String signal, SimpleTaskSignalVoidCallback callback) {
+		return task(new SimpleTask(
+				this,
+				"waitForSignal " + signal,
+				(task)->{
+					pool().program().hub().handle(signal, (arg)->{
+						callback.call();
+						task.finish();
+					});
+					
+					task.registered();
+				}
+			).important()
+		);
+	}
+	
+	/** List tasks to be performed after all other tasks have completed, as registered with
+	 * .after(...).
+	 */
+	public Deque<SimpleTask> after() {
+		return after;
 	}
 	
 	/** Perform a task after all tasks scheduled with .task() or .then() are completed, or when
@@ -123,7 +217,7 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 	 * @param lambda Lambda to be invoked for this aftertask
 	 */
 	public SimpleTaskSet after(String name, SimpleTaskCallback lambda) {
-		return after(name, (task)->lambda.call(task));
+		return after(new SimpleTask(this, name, lambda));
 	}
 	
 	/** Perform a task after all tasks scheduled with .task or .then are completed, or when
@@ -149,18 +243,26 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 		return this;
 	}
 	
+	/** Begin executing tasks from this SimpleTaskSet. The behavior of calling .run multiple
+	 * times is not defined.
+	 */
 	@Override
 	public SimpleTaskSet run() {
-		enqueueCurrentGroup();
+		enqueueNextTier();
 		return this;
 	}
 	
 	/** Immediately stop processing all further tasks. */
 	public SimpleTaskSet yield() {
-		cancel();
+		if(finished) return this;
+		enqueueAfterTasks();
 		return this;
 	}
 	
+	/** Cause this SimpleTaskSet to cease executing. Callbacks registered with .after are
+	 * not invoked. Tasks currently executing at the time cancel() is invoked are not 
+	 * interrupted. New tasks will not be scheduled into the WorkerPool. 
+	 */
 	@Override
 	public SimpleTaskSet cancel() {
 		super.cancel();
@@ -168,18 +270,31 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 		return this;
 	}
 	
-	public WorkerPool pool() {
-		return pool;
+	/** Mark a task as registered. Tasks not marked important can only run once all
+	 * important tasks in the same task group have called registered().
+	 */
+	public SimpleTaskSet registered(SimpleTask task) {
+		if(pendingRegistrations.decrementAndGet() == 0) {
+			enqueueTasksByImportance(nextGroup(), false);
+		}
+		
+		return this;
 	}
 	
+	/** Returns true if this SimpleTaskSet has finished executing. This could be because all
+	 * tasks have finished, or because a task invoked 'yield,' or because this SimpleTaskSet
+	 * has been cancelled.
+	 */
 	public boolean isFinished() {
 		return finished;
 	}
 
 	/** "Gate" all new tasks; all tasks added after calling addGate() will run
 	 * only after all tasks added prior to this addGate() call have completed. */
-	protected void addGate() {
+	public SimpleTaskSet gate() {
 		tasks.add(new ConcurrentLinkedDeque<>());
+		allTasks.add(new ConcurrentLinkedDeque<>());
+		return this;
 	}
 	
 	/** A SimpleTask has completed its lambda. */
@@ -212,24 +327,51 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 		synchronized(this) {
 			if(!isCurrentGateComplete()) return;
 			try { tasks.pop(); } catch(NoSuchElementException exc) {}
-			enqueueCurrentGroup();
+			enqueueNextTier();
 		}
 	}
 	
 	/** Add all queued tasks up to the next gate. */ 
-	protected synchronized void enqueueCurrentGroup() {
-		if(tasks.isEmpty()) {
+	protected synchronized void enqueueNextTier() {
+		PriorityQueue<SimpleTask> currentGroup = nextGroup();
+		
+		if(currentGroup == null) {
 			enqueueAfterTasks();
 		} else {
-			PriorityQueue<SimpleTask> byPriority = new PriorityQueue<SimpleTask>(tasks.getFirst());
-			for(SimpleTask task : byPriority) {
-				pool.addTask(task);
+			int numImportant = 0;
+			for(SimpleTask task : currentGroup) {
+				if(task.isImportant()) numImportant++;
 			}
+			
+			pendingRegistrations = new AtomicInteger(numImportant);
+			enqueueTasksByImportance(currentGroup, numImportant != 0);
 		}
+	}
+	
+	protected synchronized void enqueueTasksByImportance(PriorityQueue<SimpleTask> currentGroup, boolean importance) {
+		for(SimpleTask task : currentGroup) {
+			if(task.isImportant() != importance) continue;
+			pool.addTask(task);
+		}
+	}
+	
+	/** Get the next list of tasks to be performed. */
+	protected synchronized PriorityQueue<SimpleTask> nextGroup() {
+		Deque<SimpleTask> rawGroup = tasks.peek();
+		
+		while(rawGroup != null && rawGroup.isEmpty()) {
+			tasks.pop();
+			rawGroup = tasks.peek();
+		}
+		
+		if(rawGroup == null) return null;
+		
+		return new PriorityQueue<>(rawGroup);
 	}
 	
 	/** Add all aftertasks to task queue, and mark this set as finished. */
 	protected synchronized void enqueueAfterTasks() {
+		if(finished) return;
 		finished = true;
 		
 		for(SimpleTask task : after) {

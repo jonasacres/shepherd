@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.acrescrypto.shepherd.Program;
+import com.acrescrypto.shepherd.core.Program;
 import com.acrescrypto.shepherd.exceptions.TaskFinishedException;
 import com.acrescrypto.shepherd.taskset.SimpleTaskSet;
 import com.acrescrypto.shepherd.worker.WorkerPool;
@@ -168,5 +168,35 @@ class SimpleTaskTest {
 		}).run();
 		
 		assertTrue(taskset.exception.getClass().equals(RuntimeException.class));
+	}
+	
+	@Test
+	void testSortsByPriority() {
+		SimpleTask  lowPriority = new SimpleTask(taskset, name, ()->{})
+				.priority(-10);
+		SimpleTask highPriority = new SimpleTask(taskset, name, ()->{})
+				.priority(10);
+		assertTrue(lowPriority.compareTo(highPriority) > 0);
+	}
+	
+	@Test
+	void testImportantTasksSortedBeforeUnimportantTasks() {
+		SimpleTask   important = new SimpleTask(taskset, name, ()->{})
+				.important()
+				.priority(-10);
+		SimpleTask unimportant = new SimpleTask(taskset, name, ()->{})
+				.priority(10);
+		assertTrue(important.compareTo(unimportant) < 0);
+	}
+	
+	@Test
+	void testImportantTasksSortByPriority() {
+		SimpleTask lowPriority  = new SimpleTask(taskset, name, ()->{})
+				.important()
+				.priority(-10);
+		SimpleTask highPriority = new SimpleTask(taskset, name, ()->{})
+				.important()
+				.priority(10);
+		assertTrue(lowPriority.compareTo(highPriority) > 0);
 	}
 }

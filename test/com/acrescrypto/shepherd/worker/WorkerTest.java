@@ -7,8 +7,9 @@ import static org.junit.jupiter.api.Assertions.fail;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
-import com.acrescrypto.shepherd.Program;
 import static com.acrescrypto.shepherd.TestTools.*;
+
+import com.acrescrypto.shepherd.core.Program;
 import com.acrescrypto.shepherd.taskset.SimpleTask;
 import com.acrescrypto.shepherd.taskset.SimpleTaskSet;
 import com.acrescrypto.shepherd.taskset.Task;
