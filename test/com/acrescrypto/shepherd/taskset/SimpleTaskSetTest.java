@@ -115,10 +115,10 @@ public class SimpleTaskSetTest {
 			.waitForSignal("signal", ()->invoked.set(true))
 		    .run();
 		
-		waitFor( 10, ()->program.hub().handlersForSignal("signal").size() > 0);
+		waitFor(     ()->program.hub().handlersForSignal("signal").size() > 0);
 		holdFor( 10, ()->invoked.get() == false);
 		program.hub().signal("signal");
-		waitFor(100, ()->invoked.get() ==  true);
+		waitFor(     ()->invoked.get() ==  true);
 	}
 	
 	@Test
@@ -138,10 +138,10 @@ public class SimpleTaskSetTest {
 			task.finish();
 		}).run();
 		
-		waitFor(100, ()->program.hub().handlersForSignal("signal").size() > 0);
+		waitFor(()->program.hub().handlersForSignal("signal").size() > 0);
 		program.hub().signal("signal", expectedArg);
 		
-		waitFor(100, ()->invoked.get());
+		waitFor(()->invoked.get());
 	}
 	
 	@Test
@@ -155,7 +155,7 @@ public class SimpleTaskSetTest {
 			task.finish();
 		}).run();
 		
-		waitFor(100, ()->program.hub().handlersForSignal("signal").size() > 0);
+		waitFor(    ()->program.hub().handlersForSignal("signal").size() > 0);
 		program.hub().signal("signal", new Object());
 		
 		holdFor(20, ()->invoked.get() == false);
@@ -172,10 +172,10 @@ public class SimpleTaskSetTest {
 			task.finish();
 		}).run();
 		
-		waitFor(100, ()->program.hub().handlersForSignal("signal").size() > 0);
+		waitFor(()->program.hub().handlersForSignal("signal").size() > 0);
 		program.hub().signal("signal", expectedArg);
 		
-		waitFor(100, ()->matched.get() == true);
+		waitFor(()->matched.get() == true);
 	}
 	
 	@Test
@@ -187,10 +187,10 @@ public class SimpleTaskSetTest {
 			.then(()->passedGate.set(true))
 			.run();
 		
-		waitFor(100, ()->program.hub().handlersForSignal("signal").size() > 0);
+		waitFor(     ()->program.hub().handlersForSignal("signal").size() > 0);
 		holdFor( 20, ()->passedGate.get() == false);
 		program.hub().signal("signal");
-		waitFor(100, ()->passedGate.get() ==  true);
+		waitFor(     ()->passedGate.get() ==  true);
 	}
 	
 	@Test
@@ -205,7 +205,7 @@ public class SimpleTaskSetTest {
 				.waitForSignal("signal", ()->signalCaught .set(true)       )
 				.run();
 			
-			waitFor(100, ()->signalCaught.get());
+			waitFor(()->signalCaught.get());
 		}
 	}
 	
@@ -221,7 +221,7 @@ public class SimpleTaskSetTest {
 				.waitForSignal("signal", (arg, task)->signalCaught .set(true)       )
 				.run();
 			
-			waitFor(100, ()->signalCaught.get());
+			waitFor(()->signalCaught.get());
 		}
 	}
 	
@@ -238,7 +238,7 @@ public class SimpleTaskSetTest {
 				.waitForSignal("signal", obj, (arg, task)->signalCaught .set(true)            )
 				.run();
 			
-			waitFor(100, ()->signalCaught.get());
+			waitFor(()->signalCaught.get());
 		}
 	}
 	
@@ -250,10 +250,10 @@ public class SimpleTaskSetTest {
 			.waitForSignal("signal", ()->invoked.set(true))
 			.run();
 		
-		waitFor(100, ()->program.hub().handlersForSignal("signal").size() > 0);
+		waitFor(()->program.hub().handlersForSignal("signal").size() > 0);
 		
 		program.hub().signal("signal");
-		waitFor(100, ()->invoked.get());
+		waitFor(()->invoked.get());
 	}
 	
 	@Test
@@ -290,34 +290,29 @@ public class SimpleTaskSetTest {
 	}
 	
 	@Test
-	public void testRunsTasksInParallel() {
-		Object        notifier   = new Object();
-		AtomicInteger counter    = new AtomicInteger();
+	public void testRunsTasksInParallel() throws InterruptedException, BrokenBarrierException, TimeoutException {
 		int           numWorkers = 8;
+		AtomicInteger counter    = new AtomicInteger();
+		CyclicBarrier barrier    = new CyclicBarrier(numWorkers + 1);
 		
 		program.pool().workers(8);
-		waitFor(100, ()->program.pool().threadGroup().activeCount() == numWorkers);
+		waitFor(()->program.pool().threadGroup().activeCount() == numWorkers);
 		
 		for(int i = 0; i < numWorkers; i++) {
 			taskset
 				.task(()->{
 					counter.incrementAndGet();
-					synchronized(notifier) {
-						notifier.wait();
-					}
+					barrier.await();
 					counter.incrementAndGet();
 				});
 		}
 		
 		taskset.run();
 		
-		waitFor(100, ()->counter.get() ==   numWorkers);
+		waitFor(     ()->counter.get() ==   numWorkers);
 		holdFor(100, ()->counter.get() ==   numWorkers);
-		synchronized(notifier) {
-			notifier.notifyAll();
-		}
-		
-		waitFor(100, ()->counter.get() == 2*numWorkers);
+		barrier.await(1000, TimeUnit.MILLISECONDS);		
+		waitFor(     ()->counter.get() == 2*numWorkers);
 	}
 	
 	@Test
@@ -328,7 +323,7 @@ public class SimpleTaskSetTest {
 				      ranF   = new AtomicBoolean(),
 				      allSet = new AtomicBoolean();
 		program.pool().workers(4);
-		waitFor(100, ()->program.pool().threadGroup().activeCount() == 4);
+		waitFor(()->program.pool().threadGroup().activeCount() == 4);
 		
 		taskset
 			.task(()->ranA.set(true))
@@ -342,7 +337,7 @@ public class SimpleTaskSetTest {
 				ranF.set(true);
 		  }).run();
 		
-		waitFor(100, ()->ranF.get());
+		waitFor(()->ranF.get());
 		assertTrue(allSet.get());
 	}
 	
@@ -364,14 +359,13 @@ public class SimpleTaskSetTest {
 			.task(()->{})
 			.run();
 		
-		waitFor(100, ()->taskset.isFinished());
+		waitFor(()->taskset.isFinished());
 	}
 	
 	@Test
 	public void testRunningWithNoTasksOrGatesIsFine() {
 		taskset.run();
-		
-		waitFor(100, ()->taskset.isFinished());
+		waitFor(()->taskset.isFinished());
 	}
 	
 	@Test
@@ -381,7 +375,7 @@ public class SimpleTaskSetTest {
 			.gate()
 			.run();
 		
-		waitFor(100, ()->taskset.isFinished());
+		waitFor(()->taskset.isFinished());
 	}
 	
 	@Test
@@ -391,7 +385,7 @@ public class SimpleTaskSetTest {
 			.gate()
 			.run();
 		
-		waitFor(100, ()->taskset.isFinished());
+		waitFor(()->taskset.isFinished());
 	}
 	
 	@Test
@@ -401,17 +395,17 @@ public class SimpleTaskSetTest {
 			.task(()->{})
 			.run();
 		
-		waitFor(100, ()->taskset.isFinished());
+		waitFor(()->taskset.isFinished());
 	}
 	
 	@Test
-	public void testRunsTasksAfterThenInParallel() {
-		Object        notifier   = new Object();
-		AtomicInteger counter    = new AtomicInteger();
+	public void testRunsTasksAfterThenInParallel() throws InterruptedException, BrokenBarrierException, TimeoutException {
 		int           numWorkers = 8;
+		AtomicInteger counter    = new AtomicInteger();
+		CyclicBarrier barrier    = new CyclicBarrier(numWorkers + 1);
 		
 		program.pool().workers(8);
-		waitFor(100, ()->program.pool().threadGroup().activeCount() == numWorkers);
+		waitFor(()->program.pool().threadGroup().activeCount() == numWorkers);
 		
 		taskset
 			.task(()->{})
@@ -420,22 +414,18 @@ public class SimpleTaskSetTest {
 		for(int i = 0; i < numWorkers; i++) {
 			taskset.task(()->{
 				counter.incrementAndGet();
-				synchronized(notifier) {
-					notifier.wait();
-				}
+				barrier.await();
 				counter.incrementAndGet();
 			});
 		}
 		
 		taskset.run();
 		
-		waitFor(100, ()->counter.get() ==   numWorkers);
+		waitFor(     ()->counter.get() ==   numWorkers);
 		holdFor(100, ()->counter.get() ==   numWorkers);
-		synchronized(notifier) {
-			notifier.notifyAll();
-		}
+		barrier.await(1000, TimeUnit.MILLISECONDS);
 		
-		waitFor(100, ()->counter.get() == 2*numWorkers);
+		waitFor(     ()->counter.get() == 2*numWorkers);
 	}
 	
 	@Test
@@ -444,7 +434,7 @@ public class SimpleTaskSetTest {
 		CyclicBarrier barrier = new CyclicBarrier(2);
 		
 		program.pool().workers(2);
-		waitFor(100, ()->program.pool().threadGroup().activeCount() == 2);
+		waitFor(     ()->program.pool().threadGroup().activeCount() == 2);
 		
 		taskset
 			.task (()->barrier.await()       )
@@ -452,9 +442,9 @@ public class SimpleTaskSetTest {
 			.run  ();
 		
 		holdFor( 50, ()->startedAfter.get() == false);
-		barrier.await(100, TimeUnit.MILLISECONDS);
+		barrier.await(1000, TimeUnit.MILLISECONDS);
 		
-		waitFor(100, ()->startedAfter.get() ==  true);
+		waitFor(     ()->startedAfter.get() ==  true);
 	}
 
 	@Test
@@ -482,7 +472,7 @@ public class SimpleTaskSetTest {
 			  afterRan.set(true);
 		  }).run();
 		
-		waitFor(100, ()->taskset.isFinished());
+		waitFor(     ()->taskset.isFinished());
 		holdFor( 50, ()->afterRan.get() == false);
 	}
 	
@@ -491,10 +481,10 @@ public class SimpleTaskSetTest {
 		taskset
 			.task(() -> {
 				taskset.cancel();
-			  	Thread.sleep(1000);
+			  	Thread.sleep(10000);
 		  }).run();
 		
-		waitFor(100, ()->taskset.isFinished());
+		waitFor(()->taskset.isFinished());
 	}
 	
 	@Test
@@ -508,7 +498,7 @@ public class SimpleTaskSetTest {
 			  afterInvoked.set(true);
 		  }).run();
 		
-		waitFor(100, ()->afterInvoked.get());
+		waitFor(()->afterInvoked.get());
 	}
 	
 	@Test
@@ -520,7 +510,7 @@ public class SimpleTaskSetTest {
 			.then(()->invoked.set(true))
 			.run();
 		
-		waitFor(100, ()->taskset.isFinished()  );
+		waitFor(     ()->taskset.isFinished()  );
 		holdFor( 10, ()->invoked.get() == false);
 	}
 	
@@ -530,23 +520,36 @@ public class SimpleTaskSetTest {
 		  .task(()->taskset.yield())
 		  .run();
 	
-		waitFor(100, ()->taskset.isFinished());
+		waitFor(()->taskset.isFinished());
 	}
 	
 	@Test
 	public void testDoesNotRunTasksIfParentCancelled() throws InterruptedException, BrokenBarrierException, TimeoutException {
-		SimpleTaskSet parent  = new SimpleTaskSet("parent");
-		CyclicBarrier barrier = new CyclicBarrier(2);
-		AtomicBoolean invoked = new AtomicBoolean();
+		SimpleTaskSet parent   = new SimpleTaskSet("parent");
+		AtomicBoolean invoked  = new AtomicBoolean();
 		
 		taskset
 			.parent(parent)
-			.task(()->barrier.await()  )
+			.task(()->parent .cancel()  )
+			.then(()->invoked.set(true) )
+			.run();
+		
+		waitFor(    ()->taskset.isFinished());
+		holdFor(20, ()->invoked.get() == false);
+	}
+	
+	@Test
+	public void testDoesNotRunTasksIfParentFinished() throws InterruptedException, BrokenBarrierException, TimeoutException {
+		SimpleTaskSet parent   = new SimpleTaskSet("parent");
+		AtomicBoolean invoked  = new AtomicBoolean();
+		
+		taskset
+			.parent(parent)
+			.task(()->parent .finish() )
 			.then(()->invoked.set(true))
 			.run();
 		
-		barrier.await(100, TimeUnit.MILLISECONDS);
-		parent.cancel();
+		waitFor(    ()->taskset.isFinished());
 		holdFor(20, ()->invoked.get() == false);
 	}
 }

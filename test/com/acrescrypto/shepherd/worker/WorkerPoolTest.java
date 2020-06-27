@@ -21,6 +21,19 @@ public class WorkerPoolTest {
 	
 	WorkerPool pool;
 	
+	public void waitForWorkerCount(int count) {
+		waitFor(100, ()->pool.threadGroup().activeCount() == count);
+	}
+	
+	public void waitForStableWorkerCount(int count) {
+		for(int attempt = 0; attempt < 10; attempt++) {
+			stabilize(20, 100, ()->pool.threadGroup().activeCount());
+			if(count == pool.threadGroup().activeCount()) return;
+		}
+		
+		fail("Worker pool failed to stabilize to target count of " + count);
+	}
+	
 	@BeforeEach
 	public void beforeEach() {
 		pool = new WorkerPool(new Program())
@@ -34,30 +47,22 @@ public class WorkerPoolTest {
 	
 	@Test
 	public void testStartsWorkersWhenRunIsCalled() {
-		waitFor(100,
-				() -> pool.threadGroup().activeCount() == 1);
+		waitForWorkerCount(1);
 	}
 	
 	@Test
 	public void testScalesWorkersUpWhenRequested() {
 		for(int i = 1; i < 10; i++) {
-			final int ii = i;
 			pool.workers(i);
-			
-			waitFor(100, ()->pool.threadGroup().activeCount() == ii);
-			holdFor( 20, ()->pool.threadGroup().activeCount() == ii);
+			waitForStableWorkerCount(i);
 		}
 	}
 	
 	@Test
 	public void testScalesWorkersDownWhenRequested() throws InterruptedException {
 		for(int i = 10; i >= 0; i--) {
-			final int ii = i;
 			pool.workers(i);
-			
-			stabilize(10, 100, ()->pool.threadGroup().activeCount());
-			waitFor(100, ()->pool.threadGroup().activeCount() == ii);
-			holdFor( 20, ()->pool.threadGroup().activeCount() == ii);
+			waitForStableWorkerCount(i);
 		}
 	}
 	
@@ -110,15 +115,16 @@ public class WorkerPoolTest {
 	public void testDoesNotCreateExtraThreadsWhenProcessingTasks() {
 		SimpleTaskSet taskset = new SimpleTaskSet("test").pool(pool);
 		
-		pool.workers(8);
-		stabilize(10, 100, ()->pool.threadGroup().activeCount() == pool.workers());
+		pool.workers            (8);
+		waitForStableWorkerCount(8);
 
 		for(int i = 0; i < 100; i++) {
 			taskset.task(()->{});
 		}
 		taskset.run();
-		holdFor  (     10, ()->pool.threadGroup().activeCount() == pool.workers());
-		assertTrue(taskset.isFinished());
+		holdUntil(100,
+				()->pool.threadGroup().activeCount() == pool.workers(),
+				()->taskset.isFinished());
 	}
 	
 	@Test
@@ -145,36 +151,32 @@ public class WorkerPoolTest {
 	
 	@Test
 	public void testRespawnsWorkersInNewGroupWhenPoolNameChanged() {
-		pool.workers(8);
-		stabilize(10, 100, ()->pool.threadGroup().activeCount());
-		assertEquals(pool.workers(), pool.threadGroup().activeCount());
+		pool.workers            (8);
+		waitForWorkerCount      (8);
 		
 		pool.name("newname");
-		stabilize(10, 100, ()->pool.threadGroup().activeCount());
-		assertEquals(pool.workers(), pool.threadGroup().activeCount());
+		waitForStableWorkerCount(8);
 	}
 	
 	@Test
 	public void testCancelsWorkersInExistingGroupWhenPoolNameChanged() {
 		ThreadGroup oldGroup = pool.threadGroup();
 		
-		pool.workers(8);
-		stabilize(10, 100, ()->pool.threadGroup().activeCount());
-		assertEquals(pool.workers(), pool.threadGroup().activeCount());
+		pool.workers            (8);
+		waitForWorkerCount      (8);
 		
 		pool.name("newname");
-		stabilize(10, 100, ()->pool.threadGroup().activeCount());
-		assertEquals(0, oldGroup.activeCount());
+		waitForStableWorkerCount(8);
+		waitFor(100, ()->oldGroup.activeCount() == 0);
 	}
 	
 	@Test
 	public void testShutdownTerminatesWorkerThreads() {
-		pool.workers(8);
-		waitFor(100, ()->pool.threadGroup().activeCount() == 8);
+		pool.workers            (8);
+		waitForWorkerCount      (8);
 		
 		pool.shutdown();
-		stabilize(10, 100, ()->pool.threadGroup().activeCount());
-		waitFor  (    100, ()->pool.threadGroup().activeCount() == 0);
+		waitForStableWorkerCount(0);
 	}
 	
 	@Test
@@ -199,17 +201,16 @@ public class WorkerPoolTest {
 		
 		taskset.run();
 
-		waitFor  (    100, ()->numPending.get() == numWorkers);
+		waitForWorkerCount(numWorkers);
 		pool.shutdown();
 		
-		stabilize(10, 100, ()->pool.threadGroup().activeCount());
-		waitFor  (    100, ()->pool.threadGroup().activeCount() == 0);
+		waitForStableWorkerCount(0);
 	}
 	
 	@Test
 	public void testShutdownAndWaitBlocksUntilThreadsTerminated() throws TimeoutException, InterruptedException {
-		pool.workers(8);
-		waitFor(100, ()->pool.threadGroup().activeCount() == 8);
+		pool.workers            (8);
+		waitForWorkerCount      (8);
 		
 		pool.shutdownAndWait(100);
 		assertEquals(0, pool.threadGroup().activeCount());
@@ -230,6 +231,7 @@ public class WorkerPoolTest {
 				}
 		  }).run();
 		
+		waitForWorkerCount(1);
 		try {
 			pool.shutdownAndWait(5);
 			fail("Should not have succeeded");
@@ -237,6 +239,6 @@ public class WorkerPoolTest {
 			canFinish.set(true);
 		}
 		
-		waitFor  (    100, ()->pool.threadGroup().activeCount() == 0);
+		waitForStableWorkerCount(0);
 	}
 }

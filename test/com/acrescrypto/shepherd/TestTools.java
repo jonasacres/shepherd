@@ -1,6 +1,7 @@
 package com.acrescrypto.shepherd;
 import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.time.Duration;
 import java.util.function.BooleanSupplier;
@@ -38,6 +39,10 @@ public class TestTools {
 				});
 	}
 	
+	public static void waitFor(BooleanSupplier test) {
+		waitFor(1000, test);
+	}
+	
 	public static void waitFor(int timeoutMs, BooleanSupplier test) {
 		assertTimeoutPreemptively(
 				Duration.ofMillis(timeoutMs),
@@ -49,6 +54,17 @@ public class TestTools {
 	public static void holdFor(int timeoutMs, BooleanSupplier test) {
 		long endTime = System.currentTimeMillis() + timeoutMs;
 		while(System.currentTimeMillis() < endTime) {
+			assertTrue(test.getAsBoolean());
+		}
+	}
+	
+	public static void holdUntil(long timeoutMs, BooleanSupplier test, BooleanSupplier doneCondition) {
+		long endTime = System.currentTimeMillis() + timeoutMs;
+		while(!doneCondition.getAsBoolean()) {
+			if(System.currentTimeMillis() > endTime) {
+				fail("Timed out waiting for done condition");
+			}
+			
 			assertTrue(test.getAsBoolean());
 		}
 	}
