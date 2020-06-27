@@ -19,7 +19,7 @@ public abstract class TaskSet<T extends TaskSet<?>> {
 	protected Map<Object,Boolean>           tags        = new ConcurrentHashMap<>();
 	protected Deque<Object>                 convenience = new ConcurrentLinkedDeque<>();
 	protected boolean                       cancelled,
-	                                        paused;
+	                                        finished;
 	
 	public TaskSet(String name) {
 		this.name = name;
@@ -41,9 +41,9 @@ public abstract class TaskSet<T extends TaskSet<?>> {
 		return parent;
 	}
 	
-	public TaskSet<?> parent(TaskSet<?> parent) {
+	public T parent(TaskSet<?> parent) {
 		this.parent = parent;
-		return this;
+		return self();
 	}
 	
 	public String name() {
@@ -132,38 +132,25 @@ public abstract class TaskSet<T extends TaskSet<?>> {
 	}
 	
 	public T cancel() {
-		cancelled = true;
-		pause();
+		cancelled = finished = true;
 		return self();
 	}
 	
-	public boolean cancelled() {
-		return cancelled;
-	}
-	
-	public T pause() {
-		paused = true;
+	public T finish() {
+		finished = true;
 		return self();
 	}
 	
-	public T unpause() {
-		paused = false;
-		// TODO: resume scheduling somehow 
-		return self();
+	public boolean isCancelled() {
+		if(cancelled     ) return true;
+		if(parent != null) return parent.isCancelled();
+		return false;
 	}
 	
-	public T setPaused(boolean paused) {
-		if(paused) {
-			pause();
-		} else {
-			unpause();
-		}
-		
-		return self();
-	}
-	
-	public boolean paused() {
-		return paused;
+	public boolean isFinished() {
+		if(finished      ) return true;
+		if(parent != null) return parent.isFinished();
+		return false;
 	}
 	
 	public T push(Object item) {

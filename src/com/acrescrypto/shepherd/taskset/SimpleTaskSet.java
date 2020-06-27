@@ -25,7 +25,6 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 	protected Deque<Deque<SimpleTask>> allTasks  = new ConcurrentLinkedDeque<>();
 	protected Deque<Deque<SimpleTask>> tasks     = new ConcurrentLinkedDeque<>();
 	protected Deque<SimpleTask>        after     = new ConcurrentLinkedDeque<>();
-	protected boolean                  finished;
 	protected AtomicInteger            pendingRegistrations;
 	
 	public SimpleTaskSet(String name) {
@@ -259,17 +258,6 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 		return this;
 	}
 	
-	/** Cause this SimpleTaskSet to cease executing. Callbacks registered with .after are
-	 * not invoked. Tasks currently executing at the time cancel() is invoked are not 
-	 * interrupted. New tasks will not be scheduled into the WorkerPool. 
-	 */
-	@Override
-	public SimpleTaskSet cancel() {
-		super.cancel();
-		finished = true;
-		return this;
-	}
-	
 	/** Mark a task as registered. Tasks not marked important can only run once all
 	 * important tasks in the same task group have called registered().
 	 */
@@ -279,14 +267,6 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 		}
 		
 		return this;
-	}
-	
-	/** Returns true if this SimpleTaskSet has finished executing. This could be because all
-	 * tasks have finished, or because a task invoked 'yield,' or because this SimpleTaskSet
-	 * has been cancelled.
-	 */
-	public boolean isFinished() {
-		return finished;
 	}
 
 	/** "Gate" all new tasks; all tasks added after calling addGate() will run
@@ -320,9 +300,8 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 	 * schedule the next batch of tasks.
 	 */
 	protected void checkQueue() {
-		if(finished)                 return;
-		if(cancelled())              return;
-		if(!isCurrentGateComplete()) return;
+		if(isFinished())                 return;
+		if(!isCurrentGateComplete())     return;
 		
 		synchronized(this) {
 			if(!isCurrentGateComplete()) return;
@@ -337,15 +316,16 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 		
 		if(currentGroup == null) {
 			enqueueAfterTasks();
-		} else {
-			int numImportant = 0;
-			for(SimpleTask task : currentGroup) {
-				if(task.isImportant()) numImportant++;
-			}
-			
-			pendingRegistrations = new AtomicInteger(numImportant);
-			enqueueTasksByImportance(currentGroup, numImportant != 0);
+			return;
 		}
+		
+		int numImportant = 0;
+		for(SimpleTask task : currentGroup) {
+			if(task.isImportant()) numImportant++;
+		}
+		
+		pendingRegistrations = new AtomicInteger(numImportant);
+		enqueueTasksByImportance(currentGroup, numImportant != 0);
 	}
 	
 	protected synchronized void enqueueTasksByImportance(PriorityQueue<SimpleTask> currentGroup, boolean importance) {

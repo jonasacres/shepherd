@@ -30,7 +30,7 @@ public abstract class Task<T extends Task<?>> implements Comparable<Task<?>> {
 	 * If the task, or its owning TaskSet, is cancelled, then the task is not run.
 	 * */
 	public T run() {
-		if(cancelled()) return self();
+		if(isCancelled()) return self();
 		
 		try {
 			execute();
@@ -74,9 +74,9 @@ public abstract class Task<T extends Task<?>> implements Comparable<Task<?>> {
 		return self();
 	}
 	
-	/** True if task, and/or its owning TaskSet, has been marked cancelled. */
-	public boolean cancelled() {
-		return cancelled || taskset().cancelled();
+	/** True if task has been cancelled, or its owning TaskSet is finished. */
+	public boolean isCancelled() {
+		return cancelled || taskset().isCancelled();
 	}
 	
 	/** Process an exception using the handler for the owning TaskSet. */

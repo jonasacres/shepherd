@@ -1,6 +1,8 @@
 package com.acrescrypto.shepherd.taskset;
 
 import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -437,26 +439,20 @@ public class SimpleTaskSetTest {
 	}
 	
 	@Test
-	public void testInvokesAfterTasksWhenNormalTasksFinish() {
-		Object notifier = new Object();
+	public void testInvokesAfterTasksWhenNormalTasksFinish() throws InterruptedException, BrokenBarrierException, TimeoutException {
 		AtomicBoolean startedAfter = new AtomicBoolean();
+		CyclicBarrier barrier = new CyclicBarrier(2);
 		
 		program.pool().workers(2);
 		waitFor(100, ()->program.pool().threadGroup().activeCount() == 2);
 		
 		taskset
-			.task(()->{
-				synchronized(notifier) {
-					notifier.wait();
-				}
-		  }).after(()->{
-			  startedAfter.set(true);
-		  }).run();
+			.task (()->barrier.await()       )
+			.after(()->startedAfter.set(true))
+			.run  ();
 		
 		holdFor( 50, ()->startedAfter.get() == false);
-		synchronized(notifier) {
-			notifier.notifyAll();
-		}
+		barrier.await(100, TimeUnit.MILLISECONDS);
 		
 		waitFor(100, ()->startedAfter.get() ==  true);
 	}
@@ -520,11 +516,11 @@ public class SimpleTaskSetTest {
 		AtomicBoolean invoked = new AtomicBoolean();
 		
 		taskset
-			.task(()->taskset.yield())
+			.task(()->taskset.yield()  )
 			.then(()->invoked.set(true))
 			.run();
 		
-		waitFor(100, ()->taskset.isFinished());
+		waitFor(100, ()->taskset.isFinished()  );
 		holdFor( 10, ()->invoked.get() == false);
 	}
 	
@@ -535,5 +531,22 @@ public class SimpleTaskSetTest {
 		  .run();
 	
 		waitFor(100, ()->taskset.isFinished());
+	}
+	
+	@Test
+	public void testDoesNotRunTasksIfParentCancelled() throws InterruptedException, BrokenBarrierException, TimeoutException {
+		SimpleTaskSet parent  = new SimpleTaskSet("parent");
+		CyclicBarrier barrier = new CyclicBarrier(2);
+		AtomicBoolean invoked = new AtomicBoolean();
+		
+		taskset
+			.parent(parent)
+			.task(()->barrier.await()  )
+			.then(()->invoked.set(true))
+			.run();
+		
+		barrier.await(100, TimeUnit.MILLISECONDS);
+		parent.cancel();
+		holdFor(20, ()->invoked.get() == false);
 	}
 }
