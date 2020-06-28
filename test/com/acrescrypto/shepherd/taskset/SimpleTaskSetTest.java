@@ -23,7 +23,7 @@ public class SimpleTaskSetTest {
 	
 	@BeforeEach
 	public void beforeEach() {
-		program = new Program().defaults();
+		program = new Program().testDefaults();
 		taskset = new SimpleTaskSet("test").pool(program.pool());
 	}
 	
@@ -167,8 +167,8 @@ public class SimpleTaskSetTest {
 		AtomicBoolean matched = new AtomicBoolean();
 		
 		taskset
-		  .waitForSignal("signal", expectedArg, (arg, task)->{
-			matched.set(arg == expectedArg);
+		  .waitForSignal("signal", expectedArg, (sigmsg, task)->{
+			matched.set(sigmsg.argument() == expectedArg);
 			task.finish();
 		}).run();
 		
@@ -179,7 +179,7 @@ public class SimpleTaskSetTest {
 	}
 	
 	@Test
-	public void testWaitForSignalInvokesBlocksGateUntilCallbackComplete() {
+	public void testWaitForSignalBlocksGateUntilCallbackComplete() {
 		AtomicBoolean passedGate = new AtomicBoolean();
 		
 		taskset
@@ -256,7 +256,7 @@ public class SimpleTaskSetTest {
 			.run();
 		
 		waitFor(()->taskset.isFinished());
-		assertEquals(1, timesSeen);
+		assertEquals(1, timesSeen.get());
 	}
 	
 	@Test

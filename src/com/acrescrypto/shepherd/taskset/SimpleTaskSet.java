@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import com.acrescrypto.shepherd.Callbacks.TaskCallback;
 import com.acrescrypto.shepherd.Callbacks.VoidCallback;
+import com.acrescrypto.shepherd.core.SignalHub.SignalRegistration.SignalMessage;
 
 /** Describes a set of simple tasks, with no return value or argument. These tasks may
  * run in parallel (.task), or be gated to run only after all previous tasks have been
@@ -15,7 +16,7 @@ import com.acrescrypto.shepherd.Callbacks.VoidCallback;
  */
 public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 	public interface SimpleTaskSignalFullCallback {
-		void call(Object argument, SimpleTask task) throws Throwable;
+		void call(SignalMessage sigmsg, SimpleTask task) throws Throwable;
 	}
 	
 	public interface SimpleTaskSignalVoidCallback {
@@ -128,57 +129,63 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 	 * argument, and a reference to the SimpleTask object created by this method. This reference
 	 * must be marked completed (e.g. using .finish()).
 	 */
-	public SimpleTaskSet waitForSignal(String signal, SimpleTaskSignalFullCallback callback) {
+	public SimpleTaskSet waitForSignal(String signal, String name, SimpleTaskSignalFullCallback callback) {
 		return task(new SimpleTask(
 				this,
-				"waitForSignal " + signal,
+				name + " (setup)",
 				(task)->{
-					pool().program().hub().handle(signal, (arg)->{
-						callback.call(arg, task);
-					});
-					
+					new SignalTask(name, this, signal, (sigmsg)->{
+						callback.call(sigmsg, task);
+					}).times(1)
+					  .run();
 					task.registered();
 				}
 			).important()
 		);
+	}
+	
+	public SimpleTaskSet waitForSignal(String signal, SimpleTaskSignalFullCallback callback) {
+		return waitForSignal(signal, "waitForSignal " + signal, callback);
 	}
 	
 	/** Perform a task after a signal is received whose argument matches the specified object
 	 * using the .equals method. The callback is invoked with a the signal argument, and a reference to the SimpleTask object created by this method. This reference
 	 * must be marked completed (e.g. using .finish()).
 	 */
-	public SimpleTaskSet waitForSignal(String signal, Object argument, SimpleTaskSignalFullCallback callback) {
+	public SimpleTaskSet waitForSignal(String signal, Object argument, String name, SimpleTaskSignalFullCallback callback) {
 		return task(new SimpleTask(
 				this,
-				"waitForSignal " + signal,
+				name + " (setup)",
 				(task)->{
-					pool().program().hub().handle(signal, argument, (arg)->{
-						callback.call(arg, task);
-					});
-					
+					new SignalTask(name, this, signal, argument, (sigmsg)->{
+						callback.call(sigmsg, task);
+					}).times(1)
+					  .run();
 					task.registered();
 				}
 			).important()
 		);
 	}
 	
+	public SimpleTaskSet waitForSignal(String signal, Object argument, SimpleTaskSignalFullCallback callback) {
+		return waitForSignal(signal, argument, "waitForSignal " + signal, callback);
+	}
+	
 	/** Perform a task after a signal is received. The task is considered finished when the
 	 * callback returns. The callback receives no arguments.
 	 */
+	public SimpleTaskSet waitForSignal(String signal, String name, SimpleTaskSignalVoidCallback callback) {
+		return waitForSignal(signal, name, (sigmsg, task)->{
+			callback.call();
+			task.finish();
+		});
+	}
+	
 	public SimpleTaskSet waitForSignal(String signal, SimpleTaskSignalVoidCallback callback) {
-		return task(new SimpleTask(
-				this,
-				"waitForSignal " + signal,
-				(task)->{
-					pool().program().hub().handle(signal, (arg)->{
-						callback.call();
-						task.finish();
-					});
-					
-					task.registered();
-				}
-			).important()
-		);
+		return waitForSignal(signal, "waitForSignal " + signal, (sigmsg, task)->{
+			callback.call();
+			task.finish();
+		});
 	}
 	
 	/** List tasks to be performed after all other tasks have completed, as registered with
@@ -329,6 +336,7 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 	}
 	
 	protected synchronized void enqueueTasksByImportance(PriorityQueue<SimpleTask> currentGroup, boolean importance) {
+		if(currentGroup == null) return;
 		for(SimpleTask task : currentGroup) {
 			if(task.isImportant() != importance) continue;
 			pool.addTask(task);

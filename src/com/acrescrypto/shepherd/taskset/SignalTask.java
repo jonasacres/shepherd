@@ -4,6 +4,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import com.acrescrypto.shepherd.core.SignalHub;
 import com.acrescrypto.shepherd.core.SignalHub.SignalCallback;
+import com.acrescrypto.shepherd.exceptions.TaskFinishedException;
 
 public class SignalTask extends Task<SignalTask> {
 	protected String          signal;
@@ -11,9 +12,9 @@ public class SignalTask extends Task<SignalTask> {
 	protected Object          argument;
 	protected AtomicInteger   remainingInvocations;
 	protected SignalCallback  lambda;
-	protected DeferredTaskSet taskset;
+	protected TaskSet<?> taskset;
 	
-	public SignalTask(String name, DeferredTaskSet taskset, String signal, SignalCallback lambda) {
+	public SignalTask(String name, TaskSet<?> taskset, String signal, SignalCallback lambda) {
 		super(name);
 		this.signal      = signal;
 		this.taskset     = taskset;
@@ -21,7 +22,7 @@ public class SignalTask extends Task<SignalTask> {
 		this.hasArgument = false;
 	}
 	
-	public SignalTask(String name, DeferredTaskSet taskset, String signal, Object argument, SignalCallback lambda) {
+	public SignalTask(String name, TaskSet<?> taskset, String signal, Object argument, SignalCallback lambda) {
 		super(name);
 		this.signal      = signal;
 		this.taskset     = taskset;
@@ -71,7 +72,14 @@ public class SignalTask extends Task<SignalTask> {
 				}
 			}
 			
-			lambda.call(signal);
+			try {
+				lambda.call(signal);
+			} catch(TaskFinishedException exc) {
+				signal.registration().cancel();
+			} catch(Throwable exc) {
+				signal.registration().cancel();
+				exception(exc);
+			}
 		};
 		
 		if(hasArgument) {

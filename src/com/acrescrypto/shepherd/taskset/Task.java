@@ -158,4 +158,9 @@ public abstract class Task<T extends Task<?>> implements Comparable<Task<?>> {
 		
 		return "(unknown origin point)";
 	}
+	
+	@Override
+	public String toString() {
+		return this.getClass().getSimpleName() + " " + name + " (" + sourceReference() + ")";
+	}
 }
