@@ -8,7 +8,30 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
+import com.acrescrypto.shepherd.core.Program;
+import com.acrescrypto.shepherd.core.SignalHub;
+import com.acrescrypto.shepherd.worker.WorkerPool;
+
 public class TestTools {
+	public static Program testProgram() {
+		Program program = new Program();
+		return program
+			   .pool(new WorkerPool(program).workers(1))
+			   .hub (new SignalHub (program))
+			   .onException((exc)->{
+				   program.globals().put("fatalException", exc);
+				   exc.printStackTrace();
+				});
+	}
+	
+	public static void finishProgram(Program program) throws TimeoutException, InterruptedException {
+		if(program.globals().containsKey("fatalException")) {
+			fail((Throwable) program.globals().get("fatalException"));
+		}
+		
+		program.stop(1000);
+	}
+	
 	public static void stabilize(int intervalMs, int timeoutMs, Supplier<Object> test) {
 		assertTimeoutPreemptively(
 				Duration.ofMillis(timeoutMs),

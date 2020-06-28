@@ -4,6 +4,7 @@ import java.util.Deque;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.TimeoutException;
 
 import com.acrescrypto.shepherd.Callbacks.OpportunisticExceptionHandler;
 import com.acrescrypto.shepherd.exceptions.TaskSetRequiresTagException;
@@ -18,7 +19,8 @@ public abstract class TaskSet<T extends TaskSet<?>> {
 	protected Map<Object,Object>            data        = new ConcurrentHashMap<>();
 	protected Map<Object,Boolean>           tags        = new ConcurrentHashMap<>();
 	protected Deque<Object>                 convenience = new ConcurrentLinkedDeque<>();
-	protected boolean                       cancelled,
+	protected boolean                       started,
+	                                        cancelled,
 	                                        finished;
 	
 	public TaskSet(String name) {
@@ -28,7 +30,19 @@ public abstract class TaskSet<T extends TaskSet<?>> {
 				  : null;
 	}
 	
+	public synchronized T await(long timeoutMs) throws InterruptedException, TimeoutException {
+		long deadline = System.currentTimeMillis() + timeoutMs;
+		
+		while(!isFinished() && System.currentTimeMillis() < deadline) {
+			this.wait(timeoutMs);
+		}
+		
+		if(!isFinished()) throw new TimeoutException();
+		return self();
+	}
+	
 	public WorkerPool pool() {
+		if(pool == null && parent != null) return parent.pool();
 		return pool;
 	}
 	
@@ -59,6 +73,12 @@ public abstract class TaskSet<T extends TaskSet<?>> {
 		TaskSet<?> active = Worker.active().activeTask().taskset();
 		parent(active);
 		
+		return self();
+	}
+	
+	public T sibling() {
+		TaskSet<?> active = Worker.active().activeTask().taskset();
+		parent(active.parent());
 		return self();
 	}
 	
@@ -138,12 +158,18 @@ public abstract class TaskSet<T extends TaskSet<?>> {
 	
 	public T cancel() {
 		cancelled = finished = true;
+		synchronized(this) { this.notifyAll(); }
 		return self();
 	}
 	
 	public T finish() {
 		finished = true;
+		synchronized(this) { this.notifyAll(); }
 		return self();
+	}
+	
+	public boolean isRunning() {
+		return started && !isFinished();
 	}
 	
 	public boolean isCancelled() {
@@ -167,7 +193,14 @@ public abstract class TaskSet<T extends TaskSet<?>> {
 		return convenience.pop();
 	}
 	
-	public abstract T run();
+	public T run() {
+		if(isRunning()) return self();
+		
+		started = true;
+		return execute();
+	}
+	
+	protected abstract T execute();
 	
 	@SuppressWarnings("unchecked")
 	protected T self() {

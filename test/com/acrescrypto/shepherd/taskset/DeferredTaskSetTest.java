@@ -20,7 +20,7 @@ public class DeferredTaskSetTest {
 	
 	@BeforeEach
 	public void beforeEach() {
-		program  = new Program().testDefaults();
+		program  = testProgram();
 		taskset  = new DeferredTaskSet("test").pool(program.pool());
 		counter  = new AtomicInteger();
 		now      = System.currentTimeMillis();
@@ -29,7 +29,7 @@ public class DeferredTaskSetTest {
 	
 	@AfterEach
 	public void afterEach() throws TimeoutException, InterruptedException {
-		program.stop(1000);
+		finishProgram(program);
 	}
 	
 	@Test

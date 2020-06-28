@@ -1,14 +1,17 @@
 package com.acrescrypto.shepherd.core;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
 
 import com.acrescrypto.shepherd.Callbacks.ExceptionHandler;
 import com.acrescrypto.shepherd.worker.WorkerPool;
 
 public class Program {
-	protected WorkerPool       workerPool;
-	protected SignalHub        signalHub;
-	protected ExceptionHandler exceptionHandler;
+	protected WorkerPool         workerPool;
+	protected SignalHub          signalHub;
+	protected ExceptionHandler   exceptionHandler;
+	protected Map<String,Object> globals = new ConcurrentHashMap<>();
 	
 	public Program() {
 	}
@@ -22,14 +25,8 @@ public class Program {
 		return this;
 	}
 	
-	public Program testDefaults() {
-		this.workerPool = new WorkerPool(this).workers(1);
-		this.signalHub  = new SignalHub(this);
-		this.exceptionHandler = (exc) -> {
-			exc.printStackTrace();
-		};
-		
-		return this;
+	public Map<String,Object> globals() {
+		return globals;
 	}
 	
 	public WorkerPool pool() {

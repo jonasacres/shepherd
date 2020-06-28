@@ -28,7 +28,7 @@ public class SignalTaskTest {
 	
 	@BeforeEach
 	public void beforeEach() {
-		program           = new Program().testDefaults();
+		program           = testProgram();
 		taskset           = new DeferredTaskSet("test").pool(program.pool());
 		signal            = "signal";
 		argument          = new Object();
@@ -52,7 +52,7 @@ public class SignalTaskTest {
 	
 	@AfterEach
 	public void afterEach() throws TimeoutException, InterruptedException {
-		program.stop(1000);
+		finishProgram(program);
 	}
 	
 	public void waitForRegistration() {

@@ -25,7 +25,7 @@ public class SignalHubTest {
 	
 	@BeforeEach
 	public void beforeEach() {
-		program = new Program();
+		program = testProgram();
 		hub     = new SignalHub(program);
 		program.hub(hub);
 	}

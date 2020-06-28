@@ -23,13 +23,13 @@ public class SimpleTaskSetTest {
 	
 	@BeforeEach
 	public void beforeEach() {
-		program = new Program().testDefaults();
+		program = testProgram();
 		taskset = new SimpleTaskSet("test").pool(program.pool());
 	}
 	
 	@AfterEach
 	public void afterEach() throws TimeoutException, InterruptedException {
-		program.stop(100);
+		finishProgram(program);
 	}
 	
 	@Test

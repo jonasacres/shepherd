@@ -246,7 +246,7 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 	 * times is not defined.
 	 */
 	@Override
-	public SimpleTaskSet run() {
+	public SimpleTaskSet execute() {
 		enqueueNextTier();
 		return this;
 	}
@@ -332,7 +332,7 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 		if(currentGroup == null) return;
 		for(SimpleTask task : currentGroup) {
 			if(task.isImportant() != importance) continue;
-			pool.addTask(task);
+			pool().addTask(task);
 		}
 	}
 	
@@ -356,7 +356,7 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 		finished = true;
 		
 		for(SimpleTask task : after) {
-			pool.addTask(task);
+			pool().addTask(task);
 		}
 	}
 }

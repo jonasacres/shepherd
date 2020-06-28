@@ -4,6 +4,7 @@ module com.acrescrypto.shepherd {
 	requires org.junit.platform.runner;
 	requires org.junit.platform.suite.api;
 	requires java.base;
+	requires org.opentest4j;
 	
 	exports com.acrescrypto.shepherd;
 	exports com.acrescrypto.shepherd.core;

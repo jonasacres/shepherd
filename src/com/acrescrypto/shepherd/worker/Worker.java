@@ -25,14 +25,7 @@ public class Worker {
 		if(thread != null) throw new RuntimeException("Worker was run() multiple times");
 		thread = new Thread(
 				pool.threadGroup(),
-				()->{
-					try {
-						runloop();
-					} catch(Throwable exc) {
-						System.out.println("Check this shit out");
-						exc.printStackTrace();
-					}
-				},
+				()->runloop(),
 				"Worker (new)");
 		thread.start();
 		return this;

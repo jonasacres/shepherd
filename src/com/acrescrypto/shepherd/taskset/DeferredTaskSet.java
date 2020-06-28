@@ -58,7 +58,7 @@ public class DeferredTaskSet extends TaskSet<DeferredTaskSet> {
 	}
 
 	@Override
-	public DeferredTaskSet run() {
+	public DeferredTaskSet execute() {
 		/* DeferredTaskSet is unusual in that it does not need to invoke run() for its
 		 * children to operate.
 		 */

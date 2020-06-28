@@ -22,7 +22,7 @@ public class RecurringTaskTest {
 	public void beforeEach() {
 		period    = 25;
 		startTime = System.currentTimeMillis();
-		program   = new Program().testDefaults();
+		program   = testProgram();
 		taskset   = new DeferredTaskSet("test").pool(program.pool());
 		counter   = new AtomicInteger();
 		task      = new RecurringTask("task", taskset, period, (tt)->counter.incrementAndGet());
@@ -30,7 +30,7 @@ public class RecurringTaskTest {
 	
 	@AfterEach
 	public void afterEach() throws TimeoutException, InterruptedException {
-		program.stop(1000);
+		finishProgram(program);
 	}
 	
 	@Test
