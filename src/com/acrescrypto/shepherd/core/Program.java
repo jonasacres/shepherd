@@ -22,6 +22,16 @@ public class Program {
 		return this;
 	}
 	
+	public Program testDefaults() {
+		this.workerPool = new WorkerPool(this).workers(1);
+		this.signalHub  = new SignalHub(this);
+		this.exceptionHandler = (exc) -> {
+			exc.printStackTrace();
+		};
+		
+		return this;
+	}
+	
 	public WorkerPool pool() {
 		return workerPool;
 	}

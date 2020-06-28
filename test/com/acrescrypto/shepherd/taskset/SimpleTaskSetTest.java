@@ -243,6 +243,37 @@ public class SimpleTaskSetTest {
 	}
 	
 	@Test
+	public void testWaitsForSignalReceivesOnlyOneInstanceOfSignal() {
+		AtomicInteger timesSeen = new AtomicInteger();
+		
+		taskset.pool().workers(2);
+		waitFor(()->taskset.pool().threadGroup().activeCount() == 2);
+		
+		taskset
+			.task(()->program.hub().signal("signal"))
+			.task(()->program.hub().signal("signal"))
+			.waitForSignal("signal", ()->timesSeen.incrementAndGet())
+			.run();
+		
+		waitFor(()->taskset.isFinished());
+		assertEquals(1, timesSeen);
+	}
+	
+	@Test
+	public void testExceptionsInSignalHandlerGoToTaskSetHandler() {
+		AtomicBoolean sawException = new AtomicBoolean();
+		
+		taskset
+			.onException((exc) -> sawException.set(true))
+			.task(()->program.hub().signal("signal"))
+			.waitForSignal("signal", ()->{throw new RuntimeException();})
+			.run();
+		
+		waitFor(()->taskset.isFinished());
+		assertTrue(sawException.get());
+	}
+	
+	@Test
 	public void testWaitForSignalByItselfIsFine() {
 		AtomicBoolean invoked = new AtomicBoolean();
 		
@@ -492,11 +523,9 @@ public class SimpleTaskSetTest {
 		AtomicBoolean afterInvoked = new AtomicBoolean();
 		
 		taskset
-			.task(() -> {
-			  taskset.yield();
-		  }).after(()->{
-			  afterInvoked.set(true);
-		  }).run();
+			.task (() -> taskset.yield()       )
+			.after(() -> afterInvoked.set(true))
+		    .run();
 		
 		waitFor(()->afterInvoked.get());
 	}

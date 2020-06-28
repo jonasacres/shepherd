@@ -122,6 +122,11 @@ public abstract class TaskSet<T extends TaskSet<?>> {
 		return self();
 	}
 	
+	public T onException(OpportunisticExceptionHandler exceptionHandler) {
+		this.exceptionHandler = exceptionHandler;
+		return self();
+	}
+	
 	protected void escalateException(Throwable exc) {
 		if(parent() == null) {
 			pool.exception(exc);

@@ -5,6 +5,7 @@ import com.acrescrypto.shepherd.exceptions.TaskFinishedException;
 /** Describes a task to be performed. This class must be subclassed to be made useful. */
 public abstract class Task<T extends Task<?>> implements Comparable<Task<?>> {
 	protected int                 priority;
+	protected long                notBefore;
 	protected boolean             cancelled;
 	protected String              name,
 	                              sourceReference;
@@ -55,6 +56,29 @@ public abstract class Task<T extends Task<?>> implements Comparable<Task<?>> {
 		return self();
 	}
 	
+	/** Returns the minimum unix epoch millisecond timestamp at which this task
+	 * is eligible to run.
+	 * 
+	 */
+	public long notBefore() {
+		return notBefore;
+	}
+	
+	/** Sets the minimum unix epoch millisecond timestamp at which this task is
+	 * eligible to run.
+	 */
+	public T notBefore(long notBefore) {
+		this.notBefore = notBefore;
+		return self();
+	}
+	
+	/** Returns true if and only if this task is eligible to run according to its
+	 * notBefore timestamp.
+	 */
+	public boolean ready() {
+		return System.currentTimeMillis() >= notBefore;
+	}
+	
 	/** Get the task's name. */
 	public String name() {
 		return name;
@@ -76,7 +100,7 @@ public abstract class Task<T extends Task<?>> implements Comparable<Task<?>> {
 	
 	/** True if task has been cancelled, or its owning TaskSet is finished. */
 	public boolean isCancelled() {
-		return cancelled || taskset().isCancelled();
+		return cancelled || taskset().isFinished();
 	}
 	
 	/** Process an exception using the handler for the owning TaskSet. */

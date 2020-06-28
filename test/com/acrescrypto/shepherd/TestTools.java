@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.time.Duration;
+import java.util.concurrent.TimeoutException;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
@@ -13,9 +14,9 @@ public class TestTools {
 				Duration.ofMillis(timeoutMs),
 				()->{
 					Object lastValue   = null;
-					long   lastChange  = System.currentTimeMillis();
-					long   deadline    = lastChange + timeoutMs,
-					       stableTime  = lastChange + intervalMs;
+					long   now         = System.currentTimeMillis();
+					long   deadline    = now + timeoutMs,
+					       stableTime  = now + intervalMs;
 					
 					while(System.currentTimeMillis() < Math.min(deadline, stableTime))
 					{
@@ -25,17 +26,20 @@ public class TestTools {
 								            == (lastValue == null);
 						
 						boolean bothNull     =  value     == null
-								            && lastValue == null;
+								            &&  lastValue == null;
 						
 						boolean changed      = !nullityMatch
-								            && !bothNull
-								            && !value.equals(lastValue);
+								            || (     !bothNull
+								                  && !value.equals(lastValue)
+								               );
 						
 						lastValue = value;
 						if(changed) {
-							lastChange = System.currentTimeMillis();
+							stableTime = System.currentTimeMillis() + intervalMs;
 						}
 					}
+					
+					if(System.currentTimeMillis() >= deadline) throw new TimeoutException();
 				});
 	}
 	
@@ -65,7 +69,11 @@ public class TestTools {
 				fail("Timed out waiting for done condition");
 			}
 			
-			assertTrue(test.getAsBoolean());
+			if(!test.getAsBoolean()) {
+				if(!doneCondition.getAsBoolean()) {
+					fail("Hold condition failed");
+				}
+			}
 		}
 	}
 }

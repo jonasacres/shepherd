@@ -82,6 +82,36 @@ public class WorkerPoolTest {
 	}
 	
 	@Test
+	public void testDoesNotScheduleTasksThatArentReady() {
+		AtomicBoolean invoked = new AtomicBoolean();
+		SimpleTaskSet taskset = new SimpleTaskSet("test");
+		taskset
+			.pool(pool)
+			.task(new SimpleTask(
+					taskset,
+					"",
+					()->invoked.set(true)
+				  ).notBefore(Long.MAX_VALUE))
+			.run();
+		holdFor(20, ()->invoked.get() == false);
+	}
+	
+	@Test
+	public void testSchedulesTasksThatBecomeReady() {
+		AtomicBoolean invoked = new AtomicBoolean();
+		SimpleTaskSet taskset = new SimpleTaskSet("test");
+		taskset
+			.pool(pool)
+			.task(new SimpleTask(
+					taskset,
+					"",
+					()->invoked.set(true)
+				  ).notBefore(System.currentTimeMillis() + 20))
+			.run();
+		waitFor(()->invoked.get() == true);
+	}
+	
+	@Test
 	public void testOrdersTasksByPriority() {
 		SimpleTaskSet taskset = new SimpleTaskSet("test").pool(pool);
 		int priority = 1;

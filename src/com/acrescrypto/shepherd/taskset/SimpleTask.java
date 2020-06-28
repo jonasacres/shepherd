@@ -1,24 +1,17 @@
 package com.acrescrypto.shepherd.taskset;
 
+import com.acrescrypto.shepherd.Callbacks.TaskCallback;
 import com.acrescrypto.shepherd.Callbacks.VoidCallback;
 import com.acrescrypto.shepherd.exceptions.TaskFinishedException;
 
 /** Describes a task that accepts no arguments and produces no return value, and runs
  * as part of a SimpleTaskSet. */
 public class SimpleTask extends Task<SimpleTask> {
-	public interface SimpleTaskCallback {
-		/** A simple task accepting no arguments and producing no return value.
-		 * 
-		 * @param task A reference to the SimpleTask scheduling invocation of this callback. It is expected that the callback will invoke the .yield() or .finished() methods of this task to indicate task completion.
-		 * @throws Exception Any exceptions thrown are processed by the owning SimpleTaskSet's exception handler.
-		 */
-		void call(SimpleTask task) throws Exception;
-	}
-	
-	protected SimpleTaskCallback lambda;
-	protected SimpleTaskSet      taskset;
-	protected boolean            important;
-	protected boolean            finished;
+	protected TaskCallback<SimpleTask> lambda;
+	protected SimpleTaskSet            taskset;
+	protected boolean                  important;
+	protected boolean                  finished;
+	protected boolean                  after;
 	
 	/** Construct a SimpleTask from a SimpleTaskCallback. This callback received a reference
 	 * to the new SimpleTask itself. The lambda is expected to asynchronously indicate
@@ -28,7 +21,7 @@ public class SimpleTask extends Task<SimpleTask> {
 	 * @param name
 	 * @param lambda
 	 */
-	public SimpleTask(SimpleTaskSet taskset, String name, SimpleTaskCallback lambda) {
+	public SimpleTask(SimpleTaskSet taskset, String name, TaskCallback<SimpleTask> lambda) {
 		super(name);
 		this.taskset = taskset;
 		this.lambda = lambda;
@@ -68,6 +61,17 @@ public class SimpleTask extends Task<SimpleTask> {
 	/** True when this task is marked important */
 	public boolean isImportant() {
 		return important;
+	}
+	
+	/** Mark this as an 'after' task that runs after the SimpleTaskSet is finished. */
+	public SimpleTask after() {
+		after = true;
+		return this;
+	}
+	
+	/** True when this is an 'after' task that runs after the SimpleTaskSet is finished. */
+	public boolean isAfter() {
+		return after;
 	}
 	
 	/** Causes execution of this task to cease, and notifies the SimpleTaskSet that
@@ -116,6 +120,15 @@ public class SimpleTask extends Task<SimpleTask> {
 		}
 		
 		return this;
+	}
+	
+	@Override
+	public boolean isCancelled() {
+		if(after) {
+			return cancelled || taskset.isCancelled();
+		} else {
+			return cancelled || taskset.isFinished();
+		}
 	}
 	
 	@Override

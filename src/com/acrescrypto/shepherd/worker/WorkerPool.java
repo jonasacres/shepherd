@@ -1,5 +1,6 @@
 package com.acrescrypto.shepherd.worker;
 
+import java.util.Deque;
 import java.util.LinkedList;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -95,6 +96,10 @@ public class WorkerPool {
 		return this;
 	}
 	
+	public Deque<Task<?>> pending() {
+		return new LinkedList<>(tasks);
+	}
+	
 	public WorkerPool onException(OpportunisticExceptionHandler handler) {
 		this.exceptionHandler = handler;
 		return this;
@@ -152,7 +157,20 @@ public class WorkerPool {
 	}
 	
 	protected Task<?> dequeueTask() throws InterruptedException {
-		return tasks.poll(1, TimeUnit.MILLISECONDS);
+		Task<?> task = null;
+		LinkedList<Task<?>> notReady = new LinkedList<>();
+		
+		do {
+			task = tasks.poll(1, TimeUnit.MILLISECONDS);
+			if(task == null) break;
+			if(task.ready()) break;
+			
+			notReady.add(task);
+			task = null;
+		} while(!tasks.isEmpty());
+		
+		tasks.addAll(notReady);
+		return task;
 	}
 	
 	protected synchronized void workerFinished(Worker worker) {

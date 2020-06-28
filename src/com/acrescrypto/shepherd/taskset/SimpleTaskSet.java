@@ -6,8 +6,8 @@ import java.util.PriorityQueue;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.acrescrypto.shepherd.Callbacks.TaskCallback;
 import com.acrescrypto.shepherd.Callbacks.VoidCallback;
-import com.acrescrypto.shepherd.taskset.SimpleTask.SimpleTaskCallback;
 
 /** Describes a set of simple tasks, with no return value or argument. These tasks may
  * run in parallel (.task), or be gated to run only after all previous tasks have been
@@ -52,7 +52,7 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 	
 	/** Perform a task with no arguments. May run in parallel with other tasks defined
 	 * in this SimpleTaskSet. */
-	public SimpleTaskSet task(SimpleTaskCallback lambda) {
+	public SimpleTaskSet task(TaskCallback<SimpleTask> lambda) {
 		return task(new SimpleTask(this, "SimpleTask", lambda));
 	}
 	
@@ -64,7 +64,7 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 
 	/** Perform a task with no arguments. May run in parallel with other tasks defined
 	 * in this SimpleTaskSet. */
-	public SimpleTaskSet task(String name, SimpleTaskCallback lambda) {
+	public SimpleTaskSet task(String name, TaskCallback<SimpleTask> lambda) {
 		return task(new SimpleTask(this, name, lambda));
 	}
 	
@@ -87,7 +87,7 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 	/** Perform a task with no arguments. May run in parallel with other tasks defined
 	 * in subsequent calls to this SimpleTaskSet, but will not run until all previously-defined
 	 * tasks have completed. */
-	public SimpleTaskSet then(SimpleTaskCallback lambda) {
+	public SimpleTaskSet then(TaskCallback<SimpleTask> lambda) {
 		gate();
 		return task(lambda);
 	}
@@ -103,7 +103,7 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 	/** Perform a task with no arguments. May run in parallel with other tasks defined
 	 * in subsequent calls to this SimpleTaskSet, but will not run until all previously-defined
 	 * tasks have completed. */
-	public SimpleTaskSet then(String name, SimpleTaskCallback lambda) {
+	public SimpleTaskSet then(String name, TaskCallback<SimpleTask> lambda) {
 		gate();
 		return task(name, lambda);
 	}
@@ -194,7 +194,7 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 	 * 
 	 * @param lambda Lambda to be invoked for this aftertask
 	 */
-	public SimpleTaskSet after(SimpleTaskCallback lambda) {
+	public SimpleTaskSet after(TaskCallback<SimpleTask> lambda) {
 		return after("after", lambda);
 	}
 	
@@ -215,7 +215,7 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 	 * @param name Name of this aftertask, for accounting purposes
 	 * @param lambda Lambda to be invoked for this aftertask
 	 */
-	public SimpleTaskSet after(String name, SimpleTaskCallback lambda) {
+	public SimpleTaskSet after(String name, TaskCallback<SimpleTask> lambda) {
 		return after(new SimpleTask(this, name, lambda));
 	}
 	
@@ -238,7 +238,7 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 	 * @param task Task to be performed after completion of this SimpleTaskSet
 	 */
 	public SimpleTaskSet after(SimpleTask task) {
-		after.add(task);
+		after.add(task.after());
 		return this;
 	}
 	

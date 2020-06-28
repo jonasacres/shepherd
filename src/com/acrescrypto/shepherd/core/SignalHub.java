@@ -5,6 +5,7 @@ import java.util.Deque;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
+import com.acrescrypto.shepherd.core.SignalHub.SignalRegistration.SignalMessage;
 import com.acrescrypto.shepherd.exceptions.SignalRegistrationCancelledException;
 
 public class SignalHub {
@@ -13,7 +14,7 @@ public class SignalHub {
 		 * @param argument Arbitrary data specified by signal generator.
 		 * @throws SignalRegistrationCancelledException Indicates that this callback should no longer be invoked when this signal is generated in the future.
 		 */
-		void call(Object argument) throws Throwable;
+		void call(SignalMessage signal) throws Throwable;
 	}
 	
 	public interface SignalVoidCallback {
@@ -21,6 +22,30 @@ public class SignalHub {
 	}
 	
 	public class SignalRegistration {
+		public class SignalMessage {
+			protected Signal<?> signal;
+			
+			public SignalMessage(Signal<?> signal) {
+				this.signal = signal;
+			}
+			
+			public SignalRegistration registration() {
+				return SignalRegistration.this;
+			}
+			
+			public Signal<?> signal() {
+				return signal;
+			}
+			
+			public String name() {
+				return signal.name();
+			}
+			
+			public Object argument() {
+				return signal.argument();
+			}
+		}
+		
 		protected SignalCallback callback;
 		protected String signal;
 		
@@ -37,9 +62,9 @@ public class SignalHub {
 			return callback;
 		}
 		
-		public void invoke(Object argument) {
+		public void invoke(Signal<?> signal) {
 			try {
-				callback.call(argument);
+				callback.call(new SignalMessage(signal));
 			} catch(SignalRegistrationCancelledException exc) {
 				cancel();
 			} catch(Throwable exc) {
@@ -72,14 +97,15 @@ public class SignalHub {
 	}
 	
 	public SignalRegistration handle(String signal, Object expectedArgument, SignalCallback callback) {
-		SignalRegistration reg = new SignalRegistration(signal, (argument)->{
-			boolean nullityMatches = (expectedArgument == null)
-					              == (        argument == null);
-			if(!nullityMatches)                    return;
-			if(expectedArgument == null)           return;
-			if(!argument.equals(expectedArgument)) return;
+		SignalRegistration reg = new SignalRegistration(signal, (sigMsg)->{
+			boolean nullityMatches = (expectedArgument  == null)
+					              == (sigMsg.argument() == null);
 			
-			callback.call(argument);
+			if(!nullityMatches)                             return;
+			if(expectedArgument == null)                    return;
+			if(!sigMsg.argument().equals(expectedArgument)) return;
+			
+			callback.call(sigMsg);
 		});
 		
 		registrations.putIfAbsent(signal, new ConcurrentLinkedDeque<>());
@@ -120,15 +146,19 @@ public class SignalHub {
 	}
 	
 	public SignalHub signal(String signal) {
-		return signal(signal, null);
+		return signal(new Signal<Object>(signal, null));
 	}
 	
 	public SignalHub signal(String signal, Object argument) {
-		ConcurrentLinkedDeque<SignalRegistration> list = registrations.get(signal);
+		return signal(new Signal<Object>(signal, argument));
+	}
+	
+	public SignalHub signal(Signal<?> signal) {
+		ConcurrentLinkedDeque<SignalRegistration> list = registrations.get(signal.name());
 		if(list == null) return this;
 		
 		for(SignalRegistration reg : list) {
-			reg.invoke(argument);
+			reg.invoke(signal);
 		}
 		
 		return this;
