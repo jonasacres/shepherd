@@ -15,20 +15,20 @@ public class SignalTask extends Task<SignalTask> {
 	protected TaskSet<?> taskset;
 	
 	public SignalTask(String name, TaskSet<?> taskset, String signal, SignalCallback lambda) {
-		super(name);
-		this.signal      = signal;
-		this.taskset     = taskset;
-		this.lambda      = lambda;
-		this.hasArgument = false;
+		this(name, taskset, signal,null, false, lambda);
 	}
 	
 	public SignalTask(String name, TaskSet<?> taskset, String signal, Object argument, SignalCallback lambda) {
+		this(name, taskset, signal, argument, true, lambda);
+	}
+	
+	public SignalTask(String name, TaskSet<?> taskset, String signal, Object argument, boolean hasArgument, SignalCallback lambda) {
 		super(name);
 		this.signal      = signal;
 		this.taskset     = taskset;
 		this.lambda      = lambda;
 		this.argument    = argument;
-		this.hasArgument = true;
+		this.hasArgument = hasArgument;
 	}
 	
 	public SignalTask times(int numTimes) {

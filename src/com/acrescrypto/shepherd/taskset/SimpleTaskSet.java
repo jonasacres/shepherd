@@ -130,18 +130,7 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 	 * must be marked completed (e.g. using .finish()).
 	 */
 	public SimpleTaskSet waitForSignal(String signal, String name, SimpleTaskSignalFullCallback callback) {
-		return task(new SimpleTask(
-				this,
-				name + " (setup)",
-				(task)->{
-					new SignalTask(name, this, signal, (sigmsg)->{
-						callback.call(sigmsg, task);
-					}).times(1)
-					  .run();
-					task.registered();
-				}
-			).important()
-		);
+		return waitForSignalActual(signal, null, false, name, callback);
 	}
 	
 	public SimpleTaskSet waitForSignal(String signal, SimpleTaskSignalFullCallback callback) {
@@ -153,11 +142,15 @@ public class SimpleTaskSet extends TaskSet<SimpleTaskSet> {
 	 * must be marked completed (e.g. using .finish()).
 	 */
 	public SimpleTaskSet waitForSignal(String signal, Object argument, String name, SimpleTaskSignalFullCallback callback) {
+		return waitForSignalActual(signal, argument, true, name, callback);
+	}
+	
+	protected SimpleTaskSet waitForSignalActual(String signal, Object argument, boolean hasArgument, String name, SimpleTaskSignalFullCallback callback) {
 		return task(new SimpleTask(
 				this,
 				name + " (setup)",
 				(task)->{
-					new SignalTask(name, this, signal, argument, (sigmsg)->{
+					new SignalTask(name, this, signal, argument, hasArgument, (sigmsg)->{
 						callback.call(sigmsg, task);
 					}).times(1)
 					  .run();

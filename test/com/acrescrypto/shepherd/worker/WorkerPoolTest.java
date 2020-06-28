@@ -131,6 +131,8 @@ public class WorkerPoolTest {
 		}
 		
 		pool.workers(1);
+		waitForStableWorkerCount(1);
+		
 		taskset.run();
 		waitFor(100, ()->tasks.size() == numTasks);
 		
@@ -253,17 +255,18 @@ public class WorkerPoolTest {
 		new SimpleTaskSet("test")
 			.pool(pool)
 			.task(()->{
-				while(!canFinish.get()) {
+				long deadline = System.currentTimeMillis() + 1000;
+				while(!canFinish.get() && System.currentTimeMillis() < deadline) {
 					try {
 						Thread.sleep(1);
-					} catch(InterruptedException exc) {
+					} catch(Throwable exc) {
 					}
 				}
 		  }).run();
 		
 		waitForWorkerCount(1);
 		try {
-			pool.shutdownAndWait(5);
+			pool.shutdownAndWait(50);
 			fail("Should not have succeeded");
 		} catch(TimeoutException exc) {
 			canFinish.set(true);
